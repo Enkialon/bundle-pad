@@ -95,14 +95,16 @@ src-tauri\target\release\bundle\nsis\
 
 ## 使用
 
-- 文件菜单可以新建 Markdown、打开 Markdown、打开 TextBundle 目录、保存、另存为 Markdown 和退出。
+- 文件菜单可以新建 Markdown、打开 Markdown 或 TextPack、打开 TextBundle 目录、保存、另存为 Markdown 和退出。
 - 快捷键：`Ctrl+N`、`Ctrl+O`、`Ctrl+S`、`Ctrl+Shift+S`。撤销和重做使用编辑器自带的 `Ctrl+Z`、`Ctrl+Y`。
-- 可以把 `.md`、`.markdown` 或 `.textbundle` 目录拖进窗口。
+- 可以把 `.md`、`.markdown`、`.textpack` 或 `.textbundle` 目录拖进窗口。
+- `.textpack` 是 zip 压缩的 TextBundle。可以打开并编辑正文和图片，保存写回原压缩包，不改 `info.json`。
 - 可以用命令行打开一个文档：
 
 ```powershell
 BundlePad.exe "D:\docs\note.md"
 BundlePad.exe "D:\docs\example.textbundle"
+BundlePad.exe "D:\docs\example.textpack"
 ```
 
 ## 图片
@@ -124,8 +126,7 @@ BundlePad.exe "D:\docs\example.textbundle"
 
 ## 已知限制
 
-- 不支持新建 TextBundle，只能打开已经存在的目录包。
-- 不支持 `.textpack` 压缩包。
+- 不支持新建 TextBundle 或 TextPack，只能打开已经存在的文档包。
 - 不注册资源管理器文件关联。
 - 不提供知识库、多标签、插件、同步或 AI 写作。
 - 用户实际修改正文后，编辑器可能规范化 Markdown 语法；未修改的文件不会因此被重写。

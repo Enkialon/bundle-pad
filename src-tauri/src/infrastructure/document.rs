@@ -5,6 +5,7 @@ use super::classify::FsClassify;
 use super::markdown::FsMarkdown;
 use super::paths::{is_markdown_extension, is_textbundle_name};
 use super::textbundle::FsTextBundle;
+use super::textpack::FsTextPack;
 use crate::app::asset::{AssetPayload, AssetStore, SavedAsset};
 use crate::app::classify::PathClassifier;
 use crate::app::document::{DocumentStore, OpenedDocument};
@@ -13,13 +14,14 @@ use crate::app::markdown::{MarkdownDoc, OpenedMarkdown};
 use crate::app::stamp::FileStamp;
 use crate::app::textbundle::{OpenedTextBundle, TextBundleDoc};
 
-/// 按路径把文档操作分发给 Markdown 或 TextBundle 实现。
+/// 按路径把文档操作分发给 Markdown、TextBundle 或 TextPack 实现。
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FsDocument;
 
 enum Kind {
     Markdown,
     TextBundle,
+    TextPack,
 }
 
 impl DocumentStore for FsDocument {
@@ -29,6 +31,7 @@ impl DocumentStore for FsDocument {
         match classified.kind.as_str() {
             "markdown" => Ok(from_markdown(FsMarkdown.open(canonical)?)),
             "textbundle" => Ok(from_textbundle(FsTextBundle.open(canonical)?)),
+            "textpack" => Ok(from_textbundle(FsTextPack.open(canonical)?)),
             _ => Err(AppError::msg("不支持的文件类型")),
         }
     }
@@ -44,32 +47,67 @@ impl DocumentStore for FsDocument {
     ) -> AppResult<FileStamp> {
         match kind_for_storage(path)? {
             Kind::Markdown => FsMarkdown.save(path, content, has_bom, expected_sha256, overwrite),
-            Kind::TextBundle => FsTextBundle.save(path, content, has_bom, text_file_name.unwrap_or(""), expected_sha256, overwrite),
+            Kind::TextBundle => FsTextBundle.save(
+                path,
+                content,
+                has_bom,
+                text_file_name.unwrap_or(""),
+                expected_sha256,
+                overwrite,
+            ),
+            Kind::TextPack => FsTextPack.save(
+                path,
+                content,
+                has_bom,
+                text_file_name.unwrap_or(""),
+                expected_sha256,
+                overwrite,
+            ),
         }
     }
 
     fn read_asset(&self, document_path: &Path, reference: &str) -> AppResult<AssetPayload> {
+        if document_path.as_os_str().is_empty() {
+            return FsAsset.read_markdown_asset(document_path, reference);
+        }
         let classified = FsClassify.classify(document_path)?;
         let canonical = Path::new(&classified.path);
         match classified.kind.as_str() {
             "markdown" => FsAsset.read_markdown_asset(canonical, reference),
             "textbundle" => FsAsset.read_bundle_asset(canonical, reference),
+            "textpack" => FsTextPack.read_asset(canonical, reference),
             _ => Err(AppError::msg("不支持的文件类型")),
         }
     }
 
     fn write_asset(&self, document_path: &Path, data_base64: &str) -> AppResult<SavedAsset> {
+        if document_path.as_os_str().is_empty() {
+            return FsAsset.save_markdown_asset(document_path, data_base64);
+        }
         match kind_for_storage(document_path)? {
             Kind::Markdown => FsAsset.save_markdown_asset(document_path, data_base64),
             Kind::TextBundle => FsAsset.save_bundle_asset(document_path, data_base64),
+            Kind::TextPack => FsTextPack.write_asset(document_path, data_base64),
         }
     }
 
-    fn import_local_image(&self, document_path: &Path, source_path: &Path) -> AppResult<SavedAsset> {
+    fn import_local_image(
+        &self,
+        document_path: &Path,
+        source_path: &Path,
+    ) -> AppResult<SavedAsset> {
+        if document_path.as_os_str().is_empty() {
+            return FsAsset.import_local_image(document_path, "", source_path);
+        }
         let classified = FsClassify.classify(document_path)?;
         match classified.kind.as_str() {
-            "markdown" => FsAsset.import_local_image(Path::new(&classified.path), "markdown", source_path),
-            "textbundle" => FsAsset.import_local_image(Path::new(&classified.path), "textbundle", source_path),
+            "markdown" => {
+                FsAsset.import_local_image(Path::new(&classified.path), "markdown", source_path)
+            }
+            "textbundle" => {
+                FsAsset.import_local_image(Path::new(&classified.path), "textbundle", source_path)
+            }
+            "textpack" => FsTextPack.import_local_image(Path::new(&classified.path), source_path),
             _ => Err(AppError::msg("不支持的文件类型")),
         }
     }
@@ -86,9 +124,13 @@ fn kind_for_storage(path: &Path) -> AppResult<Kind> {
     if path.is_dir() {
         return Err(AppError::msg("请选择以 .textbundle 结尾的文档包目录"));
     }
-    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_ascii_lowercase();
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if extension == "textpack" {
-        return Err(AppError::msg("暂不支持 TextPack 压缩包"));
+        return Ok(Kind::TextPack);
     }
     Err(AppError::msg("只能保存为 .md 或 .markdown 文件"))
 }

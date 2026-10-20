@@ -35,11 +35,11 @@ export function createWebviewDialogs(): DialogHost {
     },
     async pickMarkdown(defaultPath?: string): Promise<string | null> {
       const selected = await open({
-        title: "打开 Markdown 文档",
+        title: "打开文档",
         multiple: false,
         directory: false,
         defaultPath,
-        filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+        filters: [{ name: "Markdown 与 TextPack", extensions: ["md", "markdown", "textpack"] }],
       });
       return typeof selected === "string" ? selected : null;
     },

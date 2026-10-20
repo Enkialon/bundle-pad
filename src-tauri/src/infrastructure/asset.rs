@@ -2,7 +2,10 @@ use base64::Engine;
 use std::path::Path;
 
 use super::image_sniff::{extension_for_mime, sniff_for_display, sniff_image, MAX_ASSET_BYTES};
-use super::paths::{ensure_assets_dir, markdown_asset_dir, read_limited, resolve_bundle_asset, resolve_markdown_image, write_unique_image};
+use super::paths::{
+    ensure_assets_dir, markdown_asset_dir, read_limited, resolve_bundle_asset, resolve_markdown_image, resolve_staged_file,
+    staging_images_dir, write_unique_image,
+};
 use super::textbundle::require_bundle;
 use crate::app::asset::{AssetPayload, AssetStore, SavedAsset};
 use crate::app::error::{AppError, AppResult};
@@ -13,9 +16,13 @@ pub struct FsAsset;
 
 impl AssetStore for FsAsset {
     fn save_markdown_asset(&self, doc_path: &Path, data_base64: &str) -> AppResult<SavedAsset> {
+        let bytes = decode_bytes(data_base64)?;
+        if doc_path.as_os_str().is_empty() {
+            return store_staged(&staging_images_dir()?, &bytes, None);
+        }
         let (directory, dir_name) = markdown_asset_dir(doc_path)?;
-        let (bytes, mime) = decode_image(data_base64)?;
-        store_image(&directory, &bytes, &mime, &dir_name)
+        let mime = sniff_image(&bytes).ok_or_else(|| AppError::msg("无法根据文件内容识别图片格式"))?;
+        store_image(&directory, &bytes, mime, &dir_name)
     }
 
     fn save_bundle_asset(&self, bundle_path: &Path, data_base64: &str) -> AppResult<SavedAsset> {
@@ -26,6 +33,10 @@ impl AssetStore for FsAsset {
     }
 
     fn read_markdown_asset(&self, doc_path: &Path, reference: &str) -> AppResult<AssetPayload> {
+        if doc_path.as_os_str().is_empty() {
+            let path = resolve_staged_file(&staging_images_dir()?, reference)?;
+            return payload_for_file(&path, reference);
+        }
         if !doc_path.is_file() {
             return Err(AppError::msg("文档路径不存在"));
         }
@@ -43,6 +54,10 @@ impl AssetStore for FsAsset {
     }
 
     fn import_local_image(&self, document_path: &Path, document_kind: &str, source_path: &Path) -> AppResult<SavedAsset> {
+        if document_path.as_os_str().is_empty() {
+            let bytes = read_limited(source_path)?;
+            return store_staged(&staging_images_dir()?, &bytes, extension_hint(source_path));
+        }
         match document_kind {
             "markdown" => import_markdown(document_path, source_path),
             "textbundle" => import_bundle(document_path, source_path),
@@ -66,7 +81,7 @@ fn import_bundle(bundle_path: &Path, source_path: &Path) -> AppResult<SavedAsset
     store_image(&directory, &bytes, mime, "assets")
 }
 
-fn decode_image(data_base64: &str) -> AppResult<(Vec<u8>, String)> {
+fn decode_bytes(data_base64: &str) -> AppResult<Vec<u8>> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64.trim())
         .map_err(|_| AppError::msg("图片数据无法识别"))?;
@@ -76,6 +91,11 @@ fn decode_image(data_base64: &str) -> AppResult<(Vec<u8>, String)> {
     if bytes.len() as u64 > MAX_ASSET_BYTES {
         return Err(AppError::msg("图片文件过大"));
     }
+    Ok(bytes)
+}
+
+pub(crate) fn decode_image(data_base64: &str) -> AppResult<(Vec<u8>, String)> {
+    let bytes = decode_bytes(data_base64)?;
     let mime = sniff_image(&bytes).ok_or_else(|| AppError::msg("无法根据文件内容识别图片格式"))?;
     Ok((bytes, mime.to_string()))
 }
@@ -89,11 +109,40 @@ fn store_image(directory: &Path, bytes: &[u8], mime: &str, relative_dir: &str) -
     })
 }
 
-fn payload_for_display(path: &Path, reference: &str) -> AppResult<AssetPayload> {
+fn store_staged(directory: &Path, bytes: &[u8], extension_hint: Option<String>) -> AppResult<SavedAsset> {
+    let prefix = dunce::simplified(directory).to_string_lossy().replace('\\', "/");
+    if let Some(mime) = sniff_image(bytes) {
+        return store_image(directory, bytes, mime, &prefix);
+    }
+    let extension = extension_hint.unwrap_or_else(|| "bin".to_string());
+    let name = write_unique_image(directory, bytes, &extension)?;
+    Ok(SavedAsset {
+        relative_path: format!("{prefix}/{name}"),
+        mime_type: "application/octet-stream".to_string(),
+    })
+}
+
+fn extension_hint(path: &Path) -> Option<String> {
+    let extension = path.extension()?.to_str()?;
+    if extension.is_empty() || extension.len() > 10 || !extension.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some(extension.to_ascii_lowercase())
+}
+
+fn payload_for_file(path: &Path, reference: &str) -> AppResult<AssetPayload> {
     let bytes = read_limited(path)?;
-    let mime = sniff_for_display(&bytes, reference).ok_or_else(|| AppError::msg("文件不是受支持的图片"))?;
+    let mime = sniff_for_display(&bytes, reference).unwrap_or_else(|| "application/octet-stream".to_string());
     Ok(AssetPayload {
         mime_type: mime,
         data_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
     })
+}
+
+fn payload_for_display(path: &Path, reference: &str) -> AppResult<AssetPayload> {
+    let payload = payload_for_file(path, reference)?;
+    if payload.mime_type == "application/octet-stream" {
+        return Err(AppError::msg("文件不是受支持的图片"));
+    }
+    Ok(payload)
 }

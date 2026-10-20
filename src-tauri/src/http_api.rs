@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::app::document::DocumentStore;
 use crate::app::error::{AppError, AppResult};
@@ -18,7 +18,9 @@ pub fn dispatch(method: &str, path: &str, body: &str) -> (u16, String) {
     }
     match path {
         "/api/launch-paths" => json_ok(&Vec::<String>::new()),
-        "/api/open-document" => with_json(body, |req: OpenBody| FsDocument.open(Path::new(&req.path))),
+        "/api/open-document" => {
+            with_json(body, |req: OpenBody| FsDocument.open(Path::new(&req.path)))
+        }
         "/api/save-document" => with_json(body, |req: SaveBody| {
             FsDocument.save(
                 Path::new(&req.path),
@@ -36,7 +38,8 @@ pub fn dispatch(method: &str, path: &str, body: &str) -> (u16, String) {
             FsDocument.write_asset(Path::new(&req.document_path), &req.data_base64)
         }),
         "/api/import-local-image" => with_json(body, |req: ImportBody| {
-            FsDocument.import_local_image(Path::new(&req.document_path), Path::new(&req.source_path))
+            FsDocument
+                .import_local_image(Path::new(&req.document_path), Path::new(&req.source_path))
         }),
         _ => dispatch_dialog(path, body),
     }
@@ -59,7 +62,10 @@ pub fn serve(addr: &str) {
         let response = tiny_http::Response::from_string(payload)
             .with_status_code(status)
             .with_header(header("Content-Type", "application/json; charset=utf-8"))
-            .with_header(header("Access-Control-Allow-Origin", "http://localhost:1420"))
+            .with_header(header(
+                "Access-Control-Allow-Origin",
+                "http://localhost:1420",
+            ))
             .with_header(header("Access-Control-Allow-Methods", "POST, OPTIONS"))
             .with_header(header("Access-Control-Allow-Headers", "content-type"));
         let _ = request.respond(response);
@@ -141,15 +147,17 @@ fn pick_path(body: &str, pick: fn(Option<String>) -> Option<String>) -> (u16, St
         Ok(value) => value.default_path.filter(|item| !item.is_empty()),
         Err(reply) => return reply,
     };
-    json_ok(&PathBody { path: pick(default_path) })
+    json_ok(&PathBody {
+        path: pick(default_path),
+    })
 }
 
 #[cfg(feature = "http")]
 fn pick_markdown(default_path: Option<String>) -> Option<String> {
     let dialog = with_directory(
         rfd::FileDialog::new()
-            .set_title("打开 Markdown 文档")
-            .add_filter("Markdown", &["md", "markdown"]),
+            .set_title("打开文档")
+            .add_filter("Markdown 与 TextPack", &["md", "markdown", "textpack"]),
         default_path,
     );
     dialog.pick_file().map(path_to_string)
@@ -157,7 +165,10 @@ fn pick_markdown(default_path: Option<String>) -> Option<String> {
 
 #[cfg(feature = "http")]
 fn pick_textbundle(default_path: Option<String>) -> Option<String> {
-    let dialog = with_directory(rfd::FileDialog::new().set_title("打开 TextBundle 文档包"), default_path);
+    let dialog = with_directory(
+        rfd::FileDialog::new().set_title("打开 TextBundle 文档包"),
+        default_path,
+    );
     dialog.pick_folder().map(path_to_string)
 }
 
@@ -178,8 +189,16 @@ fn with_directory(dialog: rfd::FileDialog, default_path: Option<String>) -> rfd:
         return dialog;
     };
     let path = Path::new(&value);
-    let directory = if path.is_dir() { path.to_path_buf() } else { path.parent().unwrap_or(path).to_path_buf() };
-    if directory.as_os_str().is_empty() { dialog } else { dialog.set_directory(&directory) }
+    let directory = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        path.parent().unwrap_or(path).to_path_buf()
+    };
+    if directory.as_os_str().is_empty() {
+        dialog
+    } else {
+        dialog.set_directory(&directory)
+    }
 }
 
 #[cfg(feature = "http")]
@@ -206,24 +225,40 @@ fn from_result<T: Serialize>(result: AppResult<T>) -> (u16, String) {
     match result {
         Ok(value) => json_ok(&value),
         Err(err) => {
-            let status = if err.code == "external_change" { 409 } else { 400 };
-            (status, serde_json::to_string(&err).unwrap_or_else(|_| fallback_error()))
+            let status = if err.code == "external_change" {
+                409
+            } else {
+                400
+            };
+            (
+                status,
+                serde_json::to_string(&err).unwrap_or_else(|_| fallback_error()),
+            )
         }
     }
 }
 
 fn json_ok<T: Serialize>(value: &T) -> (u16, String) {
-    (200, serde_json::to_string(value).unwrap_or_else(|_| fallback_error()))
+    (
+        200,
+        serde_json::to_string(value).unwrap_or_else(|_| fallback_error()),
+    )
 }
 
 #[cfg(feature = "http")]
 fn json_text(value: &str) -> (u16, String) {
-    (200, serde_json::to_string(value).unwrap_or_else(|_| "\"cancel\"".to_string()))
+    (
+        200,
+        serde_json::to_string(value).unwrap_or_else(|_| "\"cancel\"".to_string()),
+    )
 }
 
 fn error_body(status: u16, code: &str, message: &str) -> (u16, String) {
     let err = AppError::new(code, message);
-    (status, serde_json::to_string(&err).unwrap_or_else(|_| fallback_error()))
+    (
+        status,
+        serde_json::to_string(&err).unwrap_or_else(|_| fallback_error()),
+    )
 }
 
 fn fallback_error() -> String {
@@ -308,7 +343,11 @@ mod tests {
 
     #[test]
     fn rejects_a_missing_document() {
-        let (status, payload) = dispatch("POST", "/api/open-document", r#"{"path":"Z:\\missing\\no-such.md"}"#);
+        let (status, payload) = dispatch(
+            "POST",
+            "/api/open-document",
+            r#"{"path":"Z:\\missing\\no-such.md"}"#,
+        );
         assert_eq!(status, 400, "{payload}");
         let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
         assert_eq!(value["code"], "error");

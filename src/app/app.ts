@@ -80,11 +80,11 @@ export async function startApp(host: Host): Promise<void> {
     }
   };
 
+  const documentPath = () => (session.path && session.kind !== "untitled" ? session.path : "");
+
   const readReference = async (reference: string) => {
-    if (!session.path || session.kind === "untitled" || isSkippableUrl(reference)) {
-      throw new Error("无法读取图片");
-    }
-    return host.documents.readAsset(session.path, reference);
+    if (isSkippableUrl(reference)) throw new Error("无法读取图片");
+    return host.documents.readAsset(documentPath(), reference);
   };
 
   const proxyDomURL = async (url: string): Promise<string> => {
@@ -107,14 +107,9 @@ export async function startApp(host: Host): Promise<void> {
   };
 
   const uploadFile = async (file: File): Promise<string> => {
-    if (!session.path || session.kind === "untitled") {
-      const messageText = "请先保存文档，再插入图片。";
-      await host.dialogs.showError(messageText);
-      throw new Error(messageText);
-    }
     try {
       const dataBase64 = encodeBase64(new Uint8Array(await file.arrayBuffer()));
-      const saved = await host.documents.writeAsset(session.path, dataBase64);
+      const saved = await host.documents.writeAsset(documentPath(), dataBase64);
       return saved.relativePath;
     } catch (error) {
       const appError = asAppError(error);
@@ -225,12 +220,9 @@ export async function startApp(host: Host): Promise<void> {
     const mapping = new Map<string, string>();
     const missing: string[] = [];
     for (const url of localImageUrls(markdown)) {
-      if (!session.path || session.kind === "untitled") {
-        missing.push(url);
-        continue;
-      }
       try {
         const payload = await readReference(url);
+        if (!payload.mimeType.startsWith("image/")) continue;
         const saved = await host.documents.writeAsset(target, payload.dataBase64);
         mapping.set(url, saved.relativePath);
       } catch (error) {
@@ -286,7 +278,7 @@ export async function startApp(host: Host): Promise<void> {
       items: [
         { label: "新建 Markdown 文档", shortcut: "Ctrl+N", run: () => void guard(newDocument) },
         {
-          label: "打开 Markdown 文档",
+          label: "打开 Markdown 或 TextPack",
           shortcut: "Ctrl+O",
           run: () => void guard(async () => {
             const path = await host.dialogs.pickMarkdown(session.path ?? undefined);
@@ -362,7 +354,8 @@ export async function startApp(host: Host): Promise<void> {
       void host.dialogs.showError("一次只能打开一个文档。");
       return;
     }
-    if (isImagePath(path)) {
+    const untitled = !documentPath();
+    if (isImagePath(path) || (untitled && !isDocumentPath(path))) {
       void guard(() => insertDroppedImage(path));
       return;
     }
@@ -370,12 +363,12 @@ export async function startApp(host: Host): Promise<void> {
   });
 
   const insertDroppedImage = async (path: string) => {
-    if (!session.path || session.kind === "untitled" || (!sourceMode && !crepe)) {
-      await host.dialogs.showError("请先保存文档，再插入图片。");
+    if (!sourceMode && !crepe) {
+      await host.dialogs.showError("编辑器还没有准备好。");
       return;
     }
     try {
-      const saved = await host.documents.importLocalImage(session.path, path);
+      const saved = await host.documents.importLocalImage(documentPath(), path);
       if (sourceMode) {
         const snippet = `![](${saved.relativePath})`;
         sourceNode.setRangeText(snippet, sourceNode.selectionStart, sourceNode.selectionEnd, "end");
@@ -425,4 +418,9 @@ export async function startApp(host: Host): Promise<void> {
 function isImagePath(path: string): boolean {
   const lower = path.toLowerCase();
   return IMAGE_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+function isDocumentPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown") || lower.endsWith(".textbundle") || lower.endsWith(".textpack");
 }

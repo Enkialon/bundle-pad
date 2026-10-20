@@ -20,7 +20,7 @@ pub struct OpenedDocument {
 
 /// 面向文档的端口。前端不按文件格式拆命令，具体格式由路径决定。
 pub trait DocumentStore {
-    /// 识别路径并打开文档。目录且以 `.textbundle` 结尾按文档包打开，`.md` / `.markdown` 按 Markdown 打开。
+    /// 识别路径并打开文档。目录且以 `.textbundle` 结尾按文档包打开，`.textpack` 按 zip 压缩包打开，`.md` / `.markdown` 按 Markdown 打开。
     fn open(&self, path: &Path) -> AppResult<OpenedDocument>;
 
     /// 按路径对应的文档类型回写正文。TextBundle 只写 `text.*`；外部修改未确认时拒绝覆盖。

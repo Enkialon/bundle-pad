@@ -1,4 +1,4 @@
-//! 文件基础设施。对前端只暴露 [`FsDocument`]，内部仍按路径把 Markdown 和 TextBundle 分开处理。
+//! 文件基础设施。对前端只暴露 [`FsDocument`]，内部按路径把 Markdown、TextBundle 和 TextPack 分开处理。
 
 mod asset;
 mod atomic_write;
@@ -10,5 +10,6 @@ mod markdown;
 mod paths;
 mod stamp;
 mod textbundle;
+mod textpack;
 
 pub use document::FsDocument;

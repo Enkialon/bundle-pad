@@ -175,6 +175,26 @@ pub fn read_limited(path: &Path) -> AppResult<Vec<u8>> {
     Ok(bytes)
 }
 
+pub fn staging_images_dir() -> AppResult<PathBuf> {
+    let root = app_data_dir()?.join("BundlePad").join("images");
+    fs::create_dir_all(&root).map_err(|_| AppError::msg("无法创建临时附件目录"))?;
+    dunce::canonicalize(&root).map_err(from_io)
+}
+
+pub fn resolve_staged_file(directory: &Path, reference: &str) -> AppResult<PathBuf> {
+    let reference = normalize_reference(reference)?;
+    let candidate = PathBuf::from(&reference);
+    if !candidate.is_absolute() {
+        return Err(AppError::asset_missing(&reference));
+    }
+    let root = dunce::canonicalize(directory).map_err(from_io)?;
+    let file = dunce::canonicalize(&candidate).map_err(|_| AppError::asset_missing(&reference))?;
+    if !file.is_file() || !is_strict_child(&root, &file) {
+        return Err(AppError::msg("附件路径无效"));
+    }
+    Ok(file)
+}
+
 pub fn write_unique_image(directory: &Path, bytes: &[u8], extension: &str) -> AppResult<String> {
     let name = unique_image_name(directory, extension)?;
     let target = directory.join(&name);
@@ -201,6 +221,18 @@ pub fn commit_bytes(path: &Path, bytes: &[u8], expected_sha256: Option<&str>, ov
     }
     atomic_write(path, bytes).map_err(from_io)?;
     stamp_file(path)
+}
+
+fn app_data_dir() -> AppResult<PathBuf> {
+    #[cfg(windows)]
+    let dir = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let dir = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library").join("Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let dir = std::env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()).map(PathBuf::from).or_else(|| {
+        std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share"))
+    });
+    dir.filter(|path| !path.as_os_str().is_empty()).ok_or_else(|| AppError::msg("找不到用户数据目录"))
 }
 
 fn ensure_inside_bundle(bundle: &Path, candidate: &Path) -> AppResult<()> {
