@@ -23,6 +23,7 @@ import {
   undo,
 } from "../editor/create-editor.ts";
 import { mountMenu } from "../ui/menu.ts";
+import { applyTheme, currentTheme, editorThemes } from "../ui/theme.ts";
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".avif"];
 
@@ -273,7 +274,9 @@ export async function startApp(host: Host): Promise<void> {
     }
   };
 
-  mountMenu(menuRoot, [
+  const renderMenu = () => {
+    const themeId = currentTheme().id;
+    mountMenu(menuRoot, [
     {
       label: "文件",
       items: [
@@ -321,7 +324,22 @@ export async function startApp(host: Host): Promise<void> {
         { label: "有序列表", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.ordered); } },
       ],
     },
-  ]);
+    {
+      label: "主题",
+      items: editorThemes.map((theme, index) => ({
+        label: theme.label,
+        separatorBefore: index > 0 && theme.family !== editorThemes[index - 1]?.family,
+        checked: theme.id === themeId,
+        run: () => {
+          if (theme.id === currentTheme().id) return;
+          applyTheme(theme.id);
+          renderMenu();
+        },
+      })),
+    },
+    ]);
+  };
+  renderMenu();
 
   bindShortcuts({
     newDocument: () => void guard(newDocument),

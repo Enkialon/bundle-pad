@@ -2,6 +2,7 @@ export interface MenuItem {
   label: string;
   shortcut?: string;
   separatorBefore?: boolean;
+  checked?: boolean;
   run: () => void;
 }
 
@@ -10,7 +11,13 @@ export interface MenuGroup {
   items: MenuItem[];
 }
 
+const menuListeners = new WeakMap<HTMLElement, AbortController>();
+
 export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
+  menuListeners.get(root)?.abort();
+  const listener = new AbortController();
+  menuListeners.set(root, listener);
+
   root.replaceChildren();
   root.setAttribute("role", "menubar");
   let openMenu: HTMLElement | null = null;
@@ -67,7 +74,13 @@ export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
       const entry = document.createElement("button");
       entry.type = "button";
       entry.className = "menu-item";
-      entry.setAttribute("role", "menuitem");
+      if (typeof item.checked === "boolean") {
+        entry.setAttribute("role", "menuitemradio");
+        entry.setAttribute("aria-checked", item.checked ? "true" : "false");
+        entry.classList.toggle("checked", item.checked);
+      } else {
+        entry.setAttribute("role", "menuitem");
+      }
       const label = document.createElement("span");
       label.textContent = item.label;
       entry.append(label);
@@ -88,8 +101,8 @@ export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
     root.append(menu);
   }
 
-  document.addEventListener("click", close);
+  document.addEventListener("click", close, { signal: listener.signal });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") close();
-  });
+  }, { signal: listener.signal });
 }

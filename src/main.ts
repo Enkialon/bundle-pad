@@ -1,7 +1,9 @@
 import "@milkdown/crepe/theme/common/style.css";
-import "@milkdown/crepe/theme/frame.css";
 import { startApp } from "./app/app.ts";
 import { createHost } from "./host/create-host.ts";
+import { applyStoredTheme } from "./ui/theme.ts";
+
+applyStoredTheme();
 
 createHost()
   .then((host) => startApp(host))
