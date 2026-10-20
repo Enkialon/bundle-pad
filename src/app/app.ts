@@ -2,21 +2,15 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Crepe } from "@milkdown/crepe";
 import {
   asAppError,
-  classifyPath,
   decodeBase64,
   encodeBase64,
   importLocalImage,
   launchPaths,
-  openMarkdown,
-  openTextBundle,
-  readBundleAsset,
-  readMarkdownAsset,
-  saveBundleAsset,
-  saveMarkdown,
-  saveMarkdownAsset,
-  saveTextBundle,
-  type OpenedMarkdown,
-  type OpenedTextBundle,
+  openDocument,
+  readAsset,
+  saveDocument,
+  writeAsset,
+  type OpenedDocument,
 } from "./api.ts";
 import { bindShortcuts } from "./shortcuts.ts";
 import { AssetUrlMap, missingImageUrl } from "../document/asset-url-map.ts";
@@ -94,8 +88,7 @@ export async function startApp(): Promise<void> {
     if (!session.path || session.kind === "untitled" || isSkippableUrl(reference)) {
       throw new Error("无法读取图片");
     }
-    if (session.kind === "textbundle") return readBundleAsset(session.path, reference);
-    return readMarkdownAsset(session.path, reference);
+    return readAsset(session.path, reference);
   };
 
   const proxyDomURL = async (url: string): Promise<string> => {
@@ -125,10 +118,7 @@ export async function startApp(): Promise<void> {
     }
     try {
       const dataBase64 = encodeBase64(new Uint8Array(await file.arrayBuffer()));
-      const saved =
-        session.kind === "textbundle"
-          ? await saveBundleAsset(session.path, dataBase64)
-          : await saveMarkdownAsset(session.path, dataBase64);
+      const saved = await writeAsset(session.path, dataBase64);
       return saved.relativePath;
     } catch (error) {
       const appError = asAppError(error);
@@ -157,23 +147,22 @@ export async function startApp(): Promise<void> {
     focusEditor();
   };
 
-  const applyOpened = async (kind: "markdown" | "textbundle", opened: OpenedMarkdown | OpenedTextBundle) => {
+  const applyOpened = async (opened: OpenedDocument) => {
     await loadEditor(opened.content);
-    session.kind = kind;
+    session.kind = opened.kind;
     session.path = opened.path;
     session.displayName = opened.displayName;
     session.hasBom = opened.hasBom;
     session.stamp = opened.stamp;
-    session.textFileName = "textFileName" in opened ? opened.textFileName : null;
+    session.textFileName = opened.textFileName;
     session.dirty = false;
     await refreshChrome();
   };
 
   const reloadCurrent = async () => {
     if (!session.path || session.kind === "untitled") return;
-    const opened =
-      session.kind === "textbundle" ? await openTextBundle(session.path) : await openMarkdown(session.path);
-    await applyOpened(session.kind, opened);
+    const opened = await openDocument(session.path);
+    await applyOpened(opened);
   };
 
   const saveCurrent = async (overwriteExternal = false): Promise<boolean> => {
@@ -182,23 +171,14 @@ export async function startApp(): Promise<void> {
     const markdown = currentMarkdown();
     try {
       rejectBlobUrls(markdown);
-      const stamp =
-        session.kind === "textbundle"
-          ? await saveTextBundle(
-              session.path,
-              markdown,
-              session.hasBom,
-              session.textFileName ?? "",
-              session.stamp?.sha256 ?? null,
-              overwriteExternal,
-            )
-          : await saveMarkdown(
-              session.path,
-              markdown,
-              session.hasBom,
-              session.stamp?.sha256 ?? null,
-              overwriteExternal,
-            );
+      const stamp = await saveDocument(
+        session.path,
+        markdown,
+        session.hasBom,
+        session.textFileName,
+        session.stamp?.sha256 ?? null,
+        overwriteExternal,
+      );
       session.markSaved(markdown, stamp);
       await refreshChrome();
       return true;
@@ -228,10 +208,10 @@ export async function startApp(): Promise<void> {
     try {
       rejectBlobUrls(markdown);
       const rewritten = await copyLocalImages(markdown, target);
-      const stamp = await saveMarkdown(target, rewritten, false, null, true);
-      const opened = await openMarkdown(target);
+      const stamp = await saveDocument(target, rewritten, false, null, null, true);
+      const opened = await openDocument(target);
       opened.stamp = stamp;
-      await applyOpened("markdown", opened);
+      await applyOpened(opened);
       if (opened.content !== rewritten && crepe) {
         session.baseline = crepe.getMarkdown();
         session.dirty = false;
@@ -254,7 +234,7 @@ export async function startApp(): Promise<void> {
       }
       try {
         const payload = await readReference(url);
-        const saved = await saveMarkdownAsset(target, payload.dataBase64);
+        const saved = await writeAsset(target, payload.dataBase64);
         mapping.set(url, saved.relativePath);
       } catch (error) {
         const appError = asAppError(error);
@@ -279,12 +259,8 @@ export async function startApp(): Promise<void> {
   const openClassified = async (path: string) => {
     if (!(await confirmLeave())) return;
     try {
-      const classified = await classifyPath(path);
-      const opened =
-        classified.kind === "textbundle"
-          ? await openTextBundle(classified.path)
-          : await openMarkdown(classified.path);
-      await applyOpened(classified.kind, opened);
+      const opened = await openDocument(path);
+      await applyOpened(opened);
     } catch (error) {
       await showError(asAppError(error).message);
     }
@@ -404,7 +380,7 @@ export async function startApp(): Promise<void> {
       return;
     }
     try {
-      const saved = await importLocalImage(session.path, session.kind, path);
+      const saved = await importLocalImage(session.path, path);
       insertImage(crepe, saved.relativePath);
       session.noteMarkdown(currentMarkdown());
       await refreshChrome();

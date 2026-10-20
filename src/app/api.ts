@@ -6,17 +6,15 @@ export interface AppError {
   message: string;
 }
 
-export interface OpenedMarkdown {
+export interface OpenedDocument {
+  kind: "markdown" | "textbundle";
   path: string;
   displayName: string;
   content: string;
   hasBom: boolean;
   stamp: FileStamp;
-}
-
-export interface OpenedTextBundle extends OpenedMarkdown {
-  textFileName: string;
-  version: number;
+  textFileName: string | null;
+  version: number | null;
 }
 
 export interface SavedAsset {
@@ -27,11 +25,6 @@ export interface SavedAsset {
 export interface AssetPayload {
   mimeType: string;
   dataBase64: string;
-}
-
-export interface ClassifiedPath {
-  kind: "markdown" | "textbundle";
-  path: string;
 }
 
 export function asAppError(error: unknown): AppError {
@@ -74,43 +67,19 @@ export function launchPaths(): Promise<string[]> {
   return invoke("launch_paths");
 }
 
-export function classifyPath(path: string): Promise<ClassifiedPath> {
-  return invoke("classify_path", { path });
+export function openDocument(path: string): Promise<OpenedDocument> {
+  return invoke("open_document", { path });
 }
 
-export function openMarkdown(path: string): Promise<OpenedMarkdown> {
-  return invoke("open_markdown", { path });
-}
-
-export function openTextBundle(path: string): Promise<OpenedTextBundle> {
-  return invoke("open_textbundle", { path });
-}
-
-export function saveMarkdown(
+export function saveDocument(
   path: string,
   content: string,
   hasBom: boolean,
+  textFileName: string | null,
   expectedSha256: string | null,
   overwriteExternal: boolean,
 ): Promise<FileStamp> {
-  return invoke("save_markdown", {
-    path,
-    content,
-    hasBom,
-    expectedSha256,
-    overwriteExternal,
-  });
-}
-
-export function saveTextBundle(
-  path: string,
-  content: string,
-  hasBom: boolean,
-  textFileName: string,
-  expectedSha256: string | null,
-  overwriteExternal: boolean,
-): Promise<FileStamp> {
-  return invoke("save_textbundle", {
+  return invoke("save_document", {
     path,
     content,
     hasBom,
@@ -120,28 +89,16 @@ export function saveTextBundle(
   });
 }
 
-export function saveBundleAsset(bundlePath: string, dataBase64: string): Promise<SavedAsset> {
-  return invoke("save_bundle_asset", { bundlePath, dataBase64 });
+export function readAsset(documentPath: string, reference: string): Promise<AssetPayload> {
+  return invoke("read_asset", { documentPath, reference });
 }
 
-export function saveMarkdownAsset(docPath: string, dataBase64: string): Promise<SavedAsset> {
-  return invoke("save_markdown_asset", { docPath, dataBase64 });
+export function writeAsset(documentPath: string, dataBase64: string): Promise<SavedAsset> {
+  return invoke("write_asset", { documentPath, dataBase64 });
 }
 
-export function readBundleAsset(bundlePath: string, relativePath: string): Promise<AssetPayload> {
-  return invoke("read_bundle_asset", { bundlePath, relativePath });
-}
-
-export function readMarkdownAsset(docPath: string, reference: string): Promise<AssetPayload> {
-  return invoke("read_markdown_asset", { docPath, reference });
-}
-
-export function importLocalImage(
-  documentPath: string,
-  documentKind: "markdown" | "textbundle",
-  sourcePath: string,
-): Promise<SavedAsset> {
-  return invoke("import_local_image", { documentPath, documentKind, sourcePath });
+export function importLocalImage(documentPath: string, sourcePath: string): Promise<SavedAsset> {
+  return invoke("import_local_image", { documentPath, sourcePath });
 }
 
 function parseError(value: string): AppError | null {

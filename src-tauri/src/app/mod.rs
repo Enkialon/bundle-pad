@@ -2,6 +2,7 @@
 
 pub mod asset;
 pub mod classify;
+pub mod document;
 pub mod error;
 pub mod markdown;
 pub mod stamp;
