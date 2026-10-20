@@ -3,6 +3,7 @@ import { editorViewCtx, type CmdKey } from "@milkdown/kit/core";
 import { redoCommand, undoCommand } from "@milkdown/kit/plugin/history";
 import {
   createCodeBlockCommand,
+  remarkPreserveEmptyLinePlugin,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
   toggleStrongCommand,
@@ -13,6 +14,7 @@ import {
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { callCommand, replaceAll } from "@milkdown/kit/utils";
+import { stripEmptyLineBreaks } from "./empty-line-breaks.ts";
 
 export interface EditorCallbacks {
   onMarkdown: (markdown: string) => void;
@@ -109,11 +111,19 @@ export async function mountEditor(
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, next) => {
       if (hydrating) return;
-      callbacks.onMarkdown(next);
+      callbacks.onMarkdown(stripEmptyLineBreaks(next));
     });
   });
 
   await crepe.create();
+  // Milkdown 默认把空段落序列化成 <br /> 以便往返保留；普通 Markdown 不需要，关掉该开关。
+  crepe.editor.action((ctx) => {
+    if (ctx.isInjected(remarkPreserveEmptyLinePlugin.options.key)) {
+      ctx.remove(remarkPreserveEmptyLinePlugin.options.key);
+    }
+  });
+  const rawGetMarkdown = crepe.getMarkdown.bind(crepe);
+  crepe.getMarkdown = () => stripEmptyLineBreaks(rawGetMarkdown());
   await new Promise((resolve) => setTimeout(resolve, 0));
   hydrating = false;
   return { crepe, baseline: crepe.getMarkdown() };
