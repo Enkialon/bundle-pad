@@ -1,6 +1,13 @@
 mod app;
 mod commands;
+#[cfg(any(feature = "http", test))]
+mod http_api;
 mod infrastructure;
+
+#[cfg(feature = "http")]
+pub fn serve_http(addr: &str) {
+    http_api::serve(addr);
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
