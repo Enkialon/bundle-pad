@@ -1,6 +1,7 @@
 export interface MenuItem {
   label: string;
   shortcut?: string;
+  separatorBefore?: boolean;
   run: () => void;
 }
 
@@ -11,11 +12,26 @@ export interface MenuGroup {
 
 export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
   root.replaceChildren();
-  let openPanel: HTMLElement | null = null;
+  root.setAttribute("role", "menubar");
+  let openMenu: HTMLElement | null = null;
 
   const close = () => {
-    openPanel?.classList.remove("open");
-    openPanel = null;
+    if (!openMenu) return;
+    openMenu.classList.remove("open");
+    const button = openMenu.querySelector(".menu-button");
+    button?.classList.remove("open");
+    button?.setAttribute("aria-expanded", "false");
+    openMenu = null;
+  };
+
+  const open = (menu: HTMLElement) => {
+    if (openMenu === menu) return;
+    close();
+    menu.classList.add("open");
+    const button = menu.querySelector(".menu-button");
+    button?.classList.add("open");
+    button?.setAttribute("aria-expanded", "true");
+    openMenu = menu;
   };
 
   for (const group of groups) {
@@ -25,24 +41,33 @@ export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
     button.type = "button";
     button.className = "menu-button";
     button.textContent = group.label;
+    button.setAttribute("role", "menuitem");
+    button.setAttribute("aria-haspopup", "menu");
+    button.setAttribute("aria-expanded", "false");
     const panel = document.createElement("div");
     panel.className = "menu-panel";
-    panel.hidden = false;
+    panel.setAttribute("role", "menu");
 
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      const willOpen = openPanel !== panel;
-      close();
-      if (willOpen) {
-        panel.classList.add("open");
-        openPanel = panel;
-      }
+      if (openMenu === menu) close();
+      else open(menu);
+    });
+    button.addEventListener("mouseenter", () => {
+      if (openMenu && openMenu !== menu) open(menu);
     });
 
     for (const item of group.items) {
+      if (item.separatorBefore) {
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        separator.setAttribute("role", "separator");
+        panel.append(separator);
+      }
       const entry = document.createElement("button");
       entry.type = "button";
       entry.className = "menu-item";
+      entry.setAttribute("role", "menuitem");
       const label = document.createElement("span");
       label.textContent = item.label;
       entry.append(label);
@@ -51,7 +76,8 @@ export function mountMenu(root: HTMLElement, groups: MenuGroup[]): void {
         shortcut.textContent = item.shortcut;
         entry.append(shortcut);
       }
-      entry.addEventListener("click", () => {
+      entry.addEventListener("click", (event) => {
+        event.stopPropagation();
         close();
         item.run();
       });
