@@ -1,17 +1,7 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Crepe } from "@milkdown/crepe";
-import {
-  asAppError,
-  decodeBase64,
-  encodeBase64,
-  importLocalImage,
-  launchPaths,
-  openDocument,
-  readAsset,
-  saveDocument,
-  writeAsset,
-  type OpenedDocument,
-} from "./api.ts";
+import { decodeBase64, encodeBase64 } from "../host/codec.ts";
+import { asAppError } from "../host/error.ts";
+import type { Host, OpenedDocument } from "../host/types.ts";
 import { bindShortcuts } from "./shortcuts.ts";
 import { AssetUrlMap, missingImageUrl } from "../document/asset-url-map.ts";
 import { DocumentSession } from "../document/document-session.ts";
@@ -32,15 +22,6 @@ import {
   runEditorCommand,
   undo,
 } from "../editor/create-editor.ts";
-import {
-  confirmExternalChange,
-  confirmUnsaved,
-  pickMarkdown,
-  pickSaveMarkdown,
-  pickTextBundle,
-  showError,
-  showWarning,
-} from "../ui/dialogs.ts";
 import { mountMenu } from "../ui/menu.ts";
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".avif"];
@@ -50,7 +31,7 @@ interface Runtime {
   cache: Map<string, string>;
 }
 
-export async function startApp(): Promise<void> {
+export async function startApp(host: Host): Promise<void> {
   const editorRoot = document.querySelector<HTMLElement>("#editor");
   const menuRoot = document.querySelector<HTMLElement>("#menubar");
   const sourceNode = document.querySelector<HTMLTextAreaElement>("#source");
@@ -86,7 +67,8 @@ export async function startApp(): Promise<void> {
     stateNode.classList.toggle("dirty", session.dirty);
     const title = session.title();
     document.title = title;
-    await getCurrentWindow().setTitle(title);
+    host.window.noteUnsaved(session.dirty);
+    await host.window.setTitle(title);
   };
 
   const currentMarkdown = () => (sourceMode ? sourceNode.value : crepe?.getMarkdown() ?? "");
@@ -102,7 +84,7 @@ export async function startApp(): Promise<void> {
     if (!session.path || session.kind === "untitled" || isSkippableUrl(reference)) {
       throw new Error("无法读取图片");
     }
-    return readAsset(session.path, reference);
+    return host.documents.readAsset(session.path, reference);
   };
 
   const proxyDomURL = async (url: string): Promise<string> => {
@@ -127,16 +109,16 @@ export async function startApp(): Promise<void> {
   const uploadFile = async (file: File): Promise<string> => {
     if (!session.path || session.kind === "untitled") {
       const messageText = "请先保存文档，再插入图片。";
-      await showError(messageText);
+      await host.dialogs.showError(messageText);
       throw new Error(messageText);
     }
     try {
       const dataBase64 = encodeBase64(new Uint8Array(await file.arrayBuffer()));
-      const saved = await writeAsset(session.path, dataBase64);
+      const saved = await host.documents.writeAsset(session.path, dataBase64);
       return saved.relativePath;
     } catch (error) {
       const appError = asAppError(error);
-      await showError(appError.message);
+      await host.dialogs.showError(appError.message);
       throw error;
     }
   };
@@ -176,7 +158,7 @@ export async function startApp(): Promise<void> {
 
   const reloadCurrent = async () => {
     if (!session.path || session.kind === "untitled") return;
-    const opened = await openDocument(session.path);
+    const opened = await host.documents.openDocument(session.path);
     await applyOpened(opened);
   };
 
@@ -186,7 +168,7 @@ export async function startApp(): Promise<void> {
     const markdown = currentMarkdown();
     try {
       rejectBlobUrls(markdown);
-      const stamp = await saveDocument(
+      const stamp = await host.documents.saveDocument(
         session.path,
         markdown,
         session.hasBom,
@@ -200,31 +182,31 @@ export async function startApp(): Promise<void> {
     } catch (error) {
       const appError = asAppError(error);
       if (appError.code === "external_change") {
-        const choice = await confirmExternalChange();
+        const choice = await host.dialogs.confirmExternalChange();
         if (choice === "overwrite") return saveCurrent(true);
         if (choice === "reload") {
           try {
             await reloadCurrent();
           } catch (reloadError) {
-            await showError(asAppError(reloadError).message);
+            await host.dialogs.showError(asAppError(reloadError).message);
           }
         }
         return false;
       }
-      await showError(appError.message);
+      await host.dialogs.showError(appError.message);
       return false;
     }
   };
 
   const saveAs = async (): Promise<boolean> => {
-    const target = await pickSaveMarkdown(session.kind === "markdown" ? session.path ?? undefined : undefined);
+    const target = await host.dialogs.pickSaveMarkdown(session.kind === "markdown" ? session.path ?? undefined : undefined);
     if (!target) return false;
     const markdown = currentMarkdown();
     try {
       rejectBlobUrls(markdown);
       const rewritten = await copyLocalImages(markdown, target);
-      const stamp = await saveDocument(target, rewritten, false, null, null, true);
-      const opened = await openDocument(target);
+      const stamp = await host.documents.saveDocument(target, rewritten, false, null, null, true);
+      const opened = await host.documents.openDocument(target);
       opened.stamp = stamp;
       await applyOpened(opened);
       if (opened.content !== rewritten && crepe) {
@@ -234,7 +216,7 @@ export async function startApp(): Promise<void> {
       await refreshChrome();
       return true;
     } catch (error) {
-      await showError(asAppError(error).message);
+      await host.dialogs.showError(asAppError(error).message);
       return false;
     }
   };
@@ -249,7 +231,7 @@ export async function startApp(): Promise<void> {
       }
       try {
         const payload = await readReference(url);
-        const saved = await writeAsset(target, payload.dataBase64);
+        const saved = await host.documents.writeAsset(target, payload.dataBase64);
         mapping.set(url, saved.relativePath);
       } catch (error) {
         const appError = asAppError(error);
@@ -258,14 +240,14 @@ export async function startApp(): Promise<void> {
       }
     }
     if (missing.length > 0) {
-      await showWarning(`以下图片未能复制，原引用会保留：\n${missing.join("\n")}`);
+      await host.dialogs.showWarning(`以下图片未能复制，原引用会保留：\n${missing.join("\n")}`);
     }
     return rewriteImageDestinations(markdown, (url) => mapping.get(url) ?? url);
   };
 
   const confirmLeave = async (): Promise<boolean> => {
     if (!session.dirty) return true;
-    const choice = await confirmUnsaved();
+    const choice = await host.dialogs.confirmUnsaved();
     if (choice === "cancel") return false;
     if (choice === "discard") return true;
     return saveCurrent();
@@ -274,10 +256,10 @@ export async function startApp(): Promise<void> {
   const openClassified = async (path: string) => {
     if (!(await confirmLeave())) return;
     try {
-      const opened = await openDocument(path);
+      const opened = await host.documents.openDocument(path);
       await applyOpened(opened);
     } catch (error) {
-      await showError(asAppError(error).message);
+      await host.dialogs.showError(asAppError(error).message);
     }
   };
 
@@ -307,20 +289,20 @@ export async function startApp(): Promise<void> {
           label: "打开 Markdown 文档",
           shortcut: "Ctrl+O",
           run: () => void guard(async () => {
-            const path = await pickMarkdown(session.path ?? undefined);
+            const path = await host.dialogs.pickMarkdown(session.path ?? undefined);
             if (path) await openClassified(path);
           }),
         },
         {
           label: "打开 TextBundle 文档包",
           run: () => void guard(async () => {
-            const path = await pickTextBundle(session.path ?? undefined);
+            const path = await host.dialogs.pickTextBundle(session.path ?? undefined);
             if (path) await openClassified(path);
           }),
         },
         { label: "保存", shortcut: "Ctrl+S", separatorBefore: true, run: () => void guard(async () => { await saveCurrent(); }) },
         { label: "另存为 Markdown", shortcut: "Ctrl+Shift+S", run: () => void guard(async () => { await saveAs(); }) },
-        { label: "退出", separatorBefore: true, run: () => void getCurrentWindow().close() },
+        { label: "退出", separatorBefore: true, run: () => void host.window.requestClose() },
       ],
     },
     {
@@ -351,35 +333,33 @@ export async function startApp(): Promise<void> {
   bindShortcuts({
     newDocument: () => void guard(newDocument),
     openMarkdown: () => void guard(async () => {
-      const path = await pickMarkdown(session.path ?? undefined);
+      const path = await host.dialogs.pickMarkdown(session.path ?? undefined);
       if (path) await openClassified(path);
     }),
     save: () => void guard(async () => { await saveCurrent(); }),
     saveAs: () => void guard(async () => { await saveAs(); }),
   });
 
-  await getCurrentWindow().onCloseRequested(async (event) => {
-    if (closing) return;
-    event.preventDefault();
-    if (busy) return;
+  await host.window.onCloseRequested(async () => {
+    if (closing || busy) return false;
     busy = true;
     try {
       if (await confirmLeave()) {
         closing = true;
         assets.revokeAll();
-        await getCurrentWindow().destroy();
+        return true;
       }
+      return false;
     } finally {
-      busy = false;
+      if (!closing) busy = false;
     }
   });
 
-  await getCurrentWindow().onDragDropEvent((event) => {
-    if (event.payload.type !== "drop") return;
-    const [path, ...rest] = event.payload.paths;
+  await host.window.onPathsDropped((paths) => {
+    const [path, ...rest] = paths;
     if (!path) return;
     if (rest.length > 0) {
-      void showError("一次只能打开一个文档。");
+      void host.dialogs.showError("一次只能打开一个文档。");
       return;
     }
     if (isImagePath(path)) {
@@ -391,11 +371,11 @@ export async function startApp(): Promise<void> {
 
   const insertDroppedImage = async (path: string) => {
     if (!session.path || session.kind === "untitled" || (!sourceMode && !crepe)) {
-      await showError("请先保存文档，再插入图片。");
+      await host.dialogs.showError("请先保存文档，再插入图片。");
       return;
     }
     try {
-      const saved = await importLocalImage(session.path, path);
+      const saved = await host.documents.importLocalImage(session.path, path);
       if (sourceMode) {
         const snippet = `![](${saved.relativePath})`;
         sourceNode.setRangeText(snippet, sourceNode.selectionStart, sourceNode.selectionEnd, "end");
@@ -405,7 +385,7 @@ export async function startApp(): Promise<void> {
       session.noteMarkdown(currentMarkdown());
       await refreshChrome();
     } catch (error) {
-      await showError(asAppError(error).message);
+      await host.dialogs.showError(asAppError(error).message);
     }
   };
 
@@ -437,8 +417,8 @@ export async function startApp(): Promise<void> {
   session.resetUntitled();
   await refreshChrome();
 
-  const paths = await launchPaths();
-  if (paths.length > 1) await showWarning("一次只能打开一个文档，将打开第一个路径。");
+  const paths = await host.documents.launchPaths();
+  if (paths.length > 1) await host.dialogs.showWarning("一次只能打开一个文档，将打开第一个路径。");
   if (paths[0]) await openClassified(paths[0]);
 }
 
