@@ -49,6 +49,8 @@ npm run tauri build
 
 NSIS 安装包生成在 `src-tauri\target\release\bundle\nsis\`。安装不需要账户或网络服务，程序只读写用户选择的本地文档。
 
+推送到 `master` 会在 GitHub Actions 里自动构建 Windows 安装包，构建产物可从该次运行下载。推送 `v*` 标签时，同一套构建会创建 GitHub Release，并附上安装包。
+
 ## 使用
 
 文件菜单提供新建、打开 Markdown 或 TextPack、打开 TextBundle、保存、另存为 Markdown 和退出。
