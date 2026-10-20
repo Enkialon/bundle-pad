@@ -12,7 +12,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { callCommand } from "@milkdown/kit/utils";
+import { callCommand, replaceAll } from "@milkdown/kit/utils";
 
 export interface EditorCallbacks {
   onMarkdown: (markdown: string) => void;
@@ -122,6 +122,11 @@ export async function mountEditor(
 export async function destroyEditor(crepe: Crepe | null, root: HTMLElement): Promise<void> {
   if (crepe) await crepe.destroy();
   root.replaceChildren();
+}
+
+export function applyMarkdown(crepe: Crepe, markdown: string): string {
+  crepe.editor.action(replaceAll(markdown));
+  return crepe.getMarkdown();
 }
 
 export function insertImage(crepe: Crepe, src: string): void {

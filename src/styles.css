@@ -118,10 +118,36 @@ body {
   background: #e5e5e5;
 }
 
-.editor {
+.workspace {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor,
+.source {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor {
   overflow: auto;
+}
+
+.source {
+  width: 100%;
+  margin: 0;
+  padding: 24px 48px;
+  border: 0;
+  resize: none;
+  outline: none;
+  overflow: auto;
+  color: #1c1c1c;
+  background: #ffffff;
+  font-family: Consolas, "Cascadia Mono", "Segoe UI Mono", monospace;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .editor .milkdown {
@@ -130,14 +156,33 @@ body {
 
 .statusbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   height: 28px;
-  padding: 0 12px;
+  padding: 0 8px 0 4px;
   border-top: 1px solid #e4e4e7;
   background: #fafafa;
   color: #52525b;
   line-height: 28px;
+}
+
+.status-source {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.status-source:hover,
+.status-source[aria-pressed="true"] {
+  background: #e4e4e7;
+  color: #1f1f1f;
 }
 
 .statusbar .dirty {

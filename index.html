@@ -10,9 +10,12 @@
   <body>
     <div class="app">
       <header id="menubar" class="menubar"></header>
-      <main id="editor" class="editor"></main>
+      <div class="workspace">
+        <main id="editor" class="editor"></main>
+        <textarea id="source" class="source" hidden spellcheck="false" aria-label="Markdown 源码"></textarea>
+      </div>
       <footer class="statusbar">
-        <span id="status-kind">未命名</span>
+        <button type="button" id="source-mode" class="status-source" aria-pressed="false">源码模式</button>
         <span id="status-state">已保存</span>
       </footer>
     </div>

@@ -22,6 +22,7 @@ import {
   rewriteImageDestinations,
 } from "../document/image-paths.ts";
 import {
+  applyMarkdown,
   destroyEditor,
   focusEditor,
   formatCommands,
@@ -52,9 +53,10 @@ interface Runtime {
 export async function startApp(): Promise<void> {
   const editorRoot = document.querySelector<HTMLElement>("#editor");
   const menuRoot = document.querySelector<HTMLElement>("#menubar");
-  const kindNode = document.querySelector<HTMLElement>("#status-kind");
+  const sourceNode = document.querySelector<HTMLTextAreaElement>("#source");
+  const sourceButton = document.querySelector<HTMLButtonElement>("#source-mode");
   const stateNode = document.querySelector<HTMLElement>("#status-state");
-  if (!editorRoot || !menuRoot || !kindNode || !stateNode) {
+  if (!editorRoot || !menuRoot || !sourceNode || !sourceButton || !stateNode) {
     throw new Error("界面结构不完整");
   }
 
@@ -65,17 +67,29 @@ export async function startApp(): Promise<void> {
   let busy = false;
   let closing = false;
   let missingImages = false;
+  let sourceMode = false;
+
+  const syncSourceButton = () => {
+    sourceButton.textContent = sourceMode ? "退出源码模式" : "源码模式";
+    sourceButton.setAttribute("aria-pressed", sourceMode ? "true" : "false");
+  };
+
+  const showWysiwyg = () => {
+    sourceMode = false;
+    sourceNode.hidden = true;
+    editorRoot.hidden = false;
+    syncSourceButton();
+  };
 
   const refreshChrome = async () => {
-    kindNode.textContent = missingImages ? `${session.kindLabel()} · 部分图片缺失` : session.kindLabel();
-    stateNode.textContent = session.stateLabel();
+    stateNode.textContent = missingImages ? `${session.stateLabel()} · 部分图片缺失` : session.stateLabel();
     stateNode.classList.toggle("dirty", session.dirty);
     const title = session.title();
     document.title = title;
     await getCurrentWindow().setTitle(title);
   };
 
-  const currentMarkdown = () => crepe?.getMarkdown() ?? "";
+  const currentMarkdown = () => (sourceMode ? sourceNode.value : crepe?.getMarkdown() ?? "");
 
   const rejectBlobUrls = (markdown: string) => {
     const blobs = findBlobImageUrls(markdown);
@@ -128,6 +142,7 @@ export async function startApp(): Promise<void> {
   };
 
   const loadEditor = async (markdown: string) => {
+    showWysiwyg();
     runtime.generation += 1;
     runtime.cache.clear();
     assets.revokeAll();
@@ -311,24 +326,24 @@ export async function startApp(): Promise<void> {
     {
       label: "编辑",
       items: [
-        { label: "撤销", shortcut: "Ctrl+Z", run: () => undo(crepe) },
-        { label: "重做", shortcut: "Ctrl+Y", run: () => redo(crepe) },
+        { label: "撤销", shortcut: "Ctrl+Z", run: () => { if (!sourceMode) undo(crepe); } },
+        { label: "重做", shortcut: "Ctrl+Y", run: () => { if (!sourceMode) redo(crepe); } },
       ],
     },
     {
       label: "格式",
       items: [
-        { label: "正文", run: () => runEditorCommand(crepe, formatCommands.text) },
-        { label: "标题 1", run: () => runEditorCommand(crepe, formatCommands.h1, 1) },
-        { label: "标题 2", run: () => runEditorCommand(crepe, formatCommands.h2, 2) },
-        { label: "标题 3", run: () => runEditorCommand(crepe, formatCommands.h3, 3) },
-        { label: "粗体", separatorBefore: true, run: () => runEditorCommand(crepe, formatCommands.strong) },
-        { label: "斜体", run: () => runEditorCommand(crepe, formatCommands.emphasis) },
-        { label: "行内代码", run: () => runEditorCommand(crepe, formatCommands.inlineCode) },
-        { label: "引用", separatorBefore: true, run: () => runEditorCommand(crepe, formatCommands.quote) },
-        { label: "代码块", run: () => runEditorCommand(crepe, formatCommands.codeBlock) },
-        { label: "无序列表", run: () => runEditorCommand(crepe, formatCommands.bullet) },
-        { label: "有序列表", run: () => runEditorCommand(crepe, formatCommands.ordered) },
+        { label: "正文", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.text); } },
+        { label: "标题 1", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.h1, 1); } },
+        { label: "标题 2", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.h2, 2); } },
+        { label: "标题 3", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.h3, 3); } },
+        { label: "粗体", separatorBefore: true, run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.strong); } },
+        { label: "斜体", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.emphasis); } },
+        { label: "行内代码", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.inlineCode); } },
+        { label: "引用", separatorBefore: true, run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.quote); } },
+        { label: "代码块", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.codeBlock); } },
+        { label: "无序列表", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.bullet); } },
+        { label: "有序列表", run: () => { if (!sourceMode) runEditorCommand(crepe, formatCommands.ordered); } },
       ],
     },
   ]);
@@ -375,19 +390,48 @@ export async function startApp(): Promise<void> {
   });
 
   const insertDroppedImage = async (path: string) => {
-    if (!crepe || !session.path || session.kind === "untitled") {
+    if (!session.path || session.kind === "untitled" || (!sourceMode && !crepe)) {
       await showError("请先保存文档，再插入图片。");
       return;
     }
     try {
       const saved = await importLocalImage(session.path, path);
-      insertImage(crepe, saved.relativePath);
+      if (sourceMode) {
+        const snippet = `![](${saved.relativePath})`;
+        sourceNode.setRangeText(snippet, sourceNode.selectionStart, sourceNode.selectionEnd, "end");
+      } else if (crepe) {
+        insertImage(crepe, saved.relativePath);
+      }
       session.noteMarkdown(currentMarkdown());
       await refreshChrome();
     } catch (error) {
       await showError(asAppError(error).message);
     }
   };
+
+  sourceNode.addEventListener("input", () => {
+    if (!sourceMode) return;
+    session.noteMarkdown(sourceNode.value);
+    void refreshChrome();
+  });
+
+  sourceButton.addEventListener("click", () => {
+    if (!sourceMode) {
+      sourceNode.value = crepe?.getMarkdown() ?? "";
+      sourceMode = true;
+      editorRoot.hidden = true;
+      sourceNode.hidden = false;
+      syncSourceButton();
+      sourceNode.focus();
+      return;
+    }
+    const markdown = sourceNode.value;
+    showWysiwyg();
+    if (!crepe) return;
+    session.noteMarkdown(applyMarkdown(crepe, markdown));
+    void refreshChrome();
+    focusEditor();
+  });
 
   await loadEditor("");
   session.resetUntitled();

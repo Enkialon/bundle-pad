@@ -37,12 +37,6 @@ export class DocumentSession {
     this.dirty = false;
   }
 
-  kindLabel(): string {
-    if (this.kind === "textbundle") return "TextBundle";
-    if (this.kind === "markdown") return "Markdown";
-    return "未命名";
-  }
-
   stateLabel(): string {
     return this.dirty ? "未保存" : "已保存";
   }
