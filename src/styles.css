@@ -1,0 +1,115 @@
+:root {
+  color: #1c1c1c;
+  background: #ffffff;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+.app {
+  height: 100%;
+  margin: 0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menubar {
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  border-bottom: 1px solid #e4e4e7;
+  background: #fafafa;
+  user-select: none;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-button,
+.menu-item {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.menu-button {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.menu-button:hover,
+.menu-button:focus-visible,
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: #ececef;
+  outline: none;
+}
+
+.menu-panel {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 240px;
+  padding: 4px;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.menu-panel.open {
+  display: block;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.menu-item kbd {
+  color: #71717a;
+  font-family: inherit;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.editor .milkdown {
+  min-height: 100%;
+}
+
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  height: 28px;
+  padding: 0 12px;
+  border-top: 1px solid #e4e4e7;
+  background: #fafafa;
+  color: #52525b;
+  line-height: 28px;
+}
+
+.statusbar .dirty {
+  color: #9a3412;
+}
