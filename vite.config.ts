@@ -32,20 +32,6 @@ export default defineConfig(() => ({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:1422",
-        changeOrigin: true,
-      },
-    },
-  },
-  preview: {
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:1422",
-        changeOrigin: true,
-      },
-    },
   },
   test: {
     environment: "node",

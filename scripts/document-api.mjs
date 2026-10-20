@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,43 @@ const targetDir = path.join(root, "src-tauri", "target-http");
 
 export function attachDocumentApi(server) {
   const handle = ensureDocumentApi();
+  server.middlewares.use((req, res, next) => {
+    if (!req.url?.startsWith("/api")) {
+      next();
+      return;
+    }
+    const headers = { ...req.headers, host: `127.0.0.1:${port}` };
+    delete headers.connection;
+    const proxy = http.request(
+      {
+        host: "127.0.0.1",
+        port,
+        path: req.url,
+        method: req.method || "POST",
+        headers,
+      },
+      (incoming) => {
+        res.writeHead(incoming.statusCode ?? 502, incoming.headers);
+        incoming.pipe(res);
+      },
+    );
+    proxy.setTimeout(0);
+    proxy.on("error", (error) => {
+      if (res.headersSent) {
+        res.destroy(error);
+        return;
+      }
+      res.statusCode = 502;
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.end(
+        JSON.stringify({
+          code: "error",
+          message: "文档服务还没就绪。开发服务器会自动启动它，第一次需要编译，完成后再打开文件。",
+        }),
+      );
+    });
+    req.pipe(proxy);
+  });
   const stop = () => {
     void handle.then((api) => api.stop());
   };
