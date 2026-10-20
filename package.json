@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "serve:api": "node scripts/serve-api.mjs",
+    "dev:browser": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",

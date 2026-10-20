@@ -16,11 +16,7 @@ npm install
 npm run tauri dev
 ```
 
-前端单独调试：
-
-```powershell
-npm run dev
-```
+`npm run dev` 和 `npm run tauri dev` 都会在本机 `127.0.0.1:1422` 启动文档服务。浏览器里的打开、保存走这个 HTTP；桌面窗口仍由 WebView 直接调用同一套 Rust。第一次启动要编译文档服务，完成前浏览器还不能打开文件。
 
 ## 测试
 
@@ -42,9 +38,10 @@ src/
   vite-env.d.ts                    让 TypeScript 识别 CSS 模块导入
   styles.css                       窗口、菜单栏、状态栏和编辑区的样式
   assets/                          Vite 默认图标（vite、typescript、tauri）
-  app/                             应用编排、后端调用、快捷键
+  app/                             应用编排和快捷键。只依赖 host 接口
+  host/                            能力接口，以及 WebView / 浏览器两套适配
   editor/                          Milkdown 编辑器的创建和命令
-  ui/                              菜单和系统对话框
+  ui/                              菜单
   document/                        文档状态、图片路径、内存中的图片地址
 ```
 
@@ -52,18 +49,25 @@ src/
 
 应用怎么跑，集中在这里。
 
-- `app.ts`：启动后的主流程。挂上菜单和快捷键，新建、打开、保存、另存为 Markdown，打开已有 TextBundle，处理拖放和命令行传入的路径。关闭窗口前会询问未保存的修改。另存为时把本地图片复制到目标文档旁边。图片在编辑器里用内存 Blob 地址显示，保存前如果正文里还留着 `blob:` 地址就取消保存。
-- `api.ts`：前端调用 Rust 命令的入口。打开、保存、读图、写图和导入本地图片都按文档路径交给后端，由后端区分 Markdown 和 TextBundle。同时负责错误对象解析，以及图片字节和 Base64 的互相转换。
+- `app.ts`：启动后的主流程。挂上菜单和快捷键，新建、打开、保存、另存为 Markdown，打开已有 TextBundle，处理拖放和启动时传入的路径。关闭窗口前会询问未保存的修改。另存为时把本地图片复制到目标文档旁边。图片在编辑器里用内存 Blob 地址显示，保存前如果正文里还留着 `blob:` 地址就取消保存。打开、保存、对话框和关窗都通过 `Host`，这里不判断当前是 WebView 还是浏览器。
 - `shortcuts.ts`：绑定 `Ctrl+N` 新建、`Ctrl+O` 打开、`Ctrl+S` 保存、`Ctrl+Shift+S` 另存为。撤销和重做不在这里，由编辑器自己处理。
 
 ### `editor/`
 
 - `create-editor.ts`：创建和销毁 Milkdown Crepe 编辑器。打开光标、列表、链接、图片、块编辑、占位符、工具栏、代码块、表格和公式；关闭顶部栏和 AI。对外提供插入图片、撤销、重做，以及正文、标题、粗体、斜体、行内代码、引用、代码块、列表等格式命令。加载文档时先记下编辑器规范化后的正文，避免未改动的文件被标成未保存。
 
+### `host/`
+
+界面需要的能力集中在这里，按运行环境换成不同实现。
+
+- `types.ts`：文档读写、对话框和窗口壳的接口。
+- `create-host.ts`：在 Tauri 里选择 WebView 适配，在浏览器里选择 HTTP 适配。
+- `webview/`：通过 Tauri `invoke` 和系统对话框直接调用 Rust。
+- `browser/`：通过 `/api` 调用本机文档服务。文件选择和提示框由该服务弹出，这样浏览器也能拿到真实路径。
+
 ### `ui/`
 
 - `menu.ts`：渲染「文件 / 编辑 / 格式」菜单。点击展开，点空白处或按 Esc 关闭。菜单项可以带快捷键提示。
-- `dialogs.ts`：系统对话框。错误和警告提示，未保存确认（保存 / 不保存 / 取消），外部修改冲突（重新加载 / 覆盖保存 / 取消），以及打开 Markdown、打开 TextBundle 目录、另存为 Markdown 的文件选择。
 
 ### `document/`
 

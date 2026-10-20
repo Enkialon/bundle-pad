@@ -2,11 +2,12 @@ import { isTauri } from "@tauri-apps/api/core";
 import type { Host } from "./types.ts";
 
 export async function createHost(): Promise<Host> {
-  if (!isTauriRuntime()) {
-    throw new Error("当前仅支持在 Tauri 桌面窗口中运行。");
+  if (isTauriRuntime()) {
+    const { createWebviewHost } = await import("./webview/host.ts");
+    return createWebviewHost();
   }
-  const { createWebviewHost } = await import("./webview/host.ts");
-  return createWebviewHost();
+  const { createBrowserHost } = await import("./browser/host.ts");
+  return createBrowserHost();
 }
 
 function isTauriRuntime(): boolean {
