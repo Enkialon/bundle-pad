@@ -1,9 +1,11 @@
-use crate::atomic_write::atomic_write;
-use crate::error::{from_io, AppError, AppResult};
-use crate::image_sniff::MAX_ASSET_BYTES;
-use crate::stamp::{stamp_file, FileStamp};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+
+use super::atomic_write::atomic_write;
+use super::image_sniff::MAX_ASSET_BYTES;
+use super::stamp::stamp_file;
+use crate::app::error::{from_io, AppError, AppResult};
+use crate::app::stamp::FileStamp;
 
 pub fn friendly(path: &Path) -> AppResult<PathBuf> {
     dunce::canonicalize(path).map_err(from_io)
@@ -30,11 +32,7 @@ pub fn is_textbundle_name(path: &Path) -> bool {
 }
 
 pub fn normalize_reference(reference: &str) -> AppResult<String> {
-    if reference.is_empty()
-        || reference.contains('\0')
-        || reference.contains('\n')
-        || reference.contains('\r')
-    {
+    if reference.is_empty() || reference.contains('\0') || reference.contains('\n') || reference.contains('\r') {
         return Err(AppError::msg("图片路径无效"));
     }
     Ok(reference.replace('\\', "/"))

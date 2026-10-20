@@ -1,5 +1,6 @@
-use crate::error::{from_io, AppError, AppResult};
 use std::path::Path;
+
+use crate::app::error::{from_io, AppError, AppResult};
 
 #[derive(Debug)]
 pub struct DecodedText {
@@ -18,9 +19,7 @@ pub fn decode_utf8(bytes: &[u8]) -> AppResult<DecodedText> {
     } else {
         (false, bytes)
     };
-    let content = String::from_utf8(rest.to_vec()).map_err(|_| {
-        AppError::msg("文件不是有效的 UTF-8，已停止打开以避免丢失数据")
-    })?;
+    let content = String::from_utf8(rest.to_vec()).map_err(|_| AppError::msg("文件不是有效的 UTF-8，已停止打开以避免丢失数据"))?;
     Ok(DecodedText { content, has_bom })
 }
 

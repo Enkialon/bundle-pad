@@ -10,10 +10,7 @@ pub fn atomic_write(target: &Path, bytes: &[u8]) -> io::Result<()> {
     })?;
     fs::create_dir_all(parent)?;
 
-    let mut temp = tempfile::Builder::new()
-        .prefix(".bundlepad-")
-        .suffix(".tmp")
-        .tempfile_in(parent)?;
+    let mut temp = tempfile::Builder::new().prefix(".bundlepad-").suffix(".tmp").tempfile_in(parent)?;
     temp.write_all(bytes)?;
     temp.flush()?;
     temp.as_file().sync_all()?;
@@ -36,13 +33,7 @@ fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
 
     let from_wide = wide(from);
     let to_wide = wide(to);
-    let ok = unsafe {
-        MoveFileExW(
-            from_wide.as_ptr(),
-            to_wide.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
+    let ok = unsafe { MoveFileExW(from_wide.as_ptr(), to_wide.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) };
     if ok == 0 {
         Err(io::Error::last_os_error())
     } else {

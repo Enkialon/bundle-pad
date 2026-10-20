@@ -1,17 +1,10 @@
-use crate::error::{from_io, AppResult};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct FileStamp {
-    pub sha256: String,
-    pub len: u64,
-    pub modified_ms: u64,
-}
+use crate::app::error::{from_io, AppResult};
+use crate::app::stamp::FileStamp;
 
 pub fn stamp_bytes(bytes: &[u8], modified_ms: u64) -> FileStamp {
     FileStamp {

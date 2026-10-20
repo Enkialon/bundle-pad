@@ -1,7 +1,5 @@
 pub const MAX_ASSET_BYTES: u64 = 40 * 1024 * 1024;
 
-pub const MARKDOWN_UTI: &str = "net.daringfireball.markdown";
-
 pub fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Some("image/png");
