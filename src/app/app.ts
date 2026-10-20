@@ -140,13 +140,14 @@ export async function startApp(host: Host): Promise<void> {
   };
 
   const applyOpened = async (opened: OpenedDocument) => {
-    await loadEditor(opened.content);
+    // 图片在编辑器挂载过程中就会读取。路径必须先就位，否则冷启动（双击、命令行）时会话还是未命名，读不到包内图片。
     session.kind = opened.kind;
     session.path = opened.path;
     session.displayName = opened.displayName;
     session.hasBom = opened.hasBom;
     session.stamp = opened.stamp;
     session.textFileName = opened.textFileName;
+    await loadEditor(opened.content);
     session.dirty = false;
     await refreshChrome();
   };
