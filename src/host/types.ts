@@ -52,6 +52,7 @@ export interface DialogHost {
   pickMarkdown(defaultPath?: string): Promise<string | null>;
   pickTextBundle(defaultPath?: string): Promise<string | null>;
   pickSaveMarkdown(defaultPath?: string): Promise<string | null>;
+  pickSavePdf(defaultPath?: string): Promise<string | null>;
 }
 
 /** 窗口壳。关窗确认由界面给出，适配器负责真正关闭。 */
@@ -63,8 +64,13 @@ export interface WindowHost {
   onPathsDropped(handle: (paths: string[]) => void): Promise<void>;
 }
 
+export interface ExportHost {
+  exportPdf(path: string): Promise<void>;
+}
+
 export interface Host {
   documents: DocumentHost;
   dialogs: DialogHost;
   window: WindowHost;
+  export: ExportHost;
 }

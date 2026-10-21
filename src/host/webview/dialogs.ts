@@ -1,5 +1,5 @@
 import { message, open, save } from "@tauri-apps/plugin-dialog";
-import { ensureMarkdownExtension } from "../markdown-path.ts";
+import { ensureMarkdownExtension, ensurePdfExtension } from "../markdown-path.ts";
 import type { DialogHost } from "../types.ts";
 
 export function createWebviewDialogs(): DialogHost {
@@ -60,6 +60,15 @@ export function createWebviewDialogs(): DialogHost {
       });
       if (!selected) return null;
       return ensureMarkdownExtension(selected);
+    },
+    async pickSavePdf(defaultPath?: string): Promise<string | null> {
+      const selected = await save({
+        title: "导出 PDF",
+        defaultPath,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (!selected) return null;
+      return ensurePdfExtension(selected);
     },
   };
 }

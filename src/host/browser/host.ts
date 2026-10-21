@@ -1,9 +1,10 @@
 import type { FileStamp } from "../../document/document-session.ts";
-import { ensureMarkdownExtension } from "../markdown-path.ts";
+import { ensureMarkdownExtension, ensurePdfExtension } from "../markdown-path.ts";
 import type {
   AssetPayload,
   DialogHost,
   DocumentHost,
+  ExportHost,
   Host,
   OpenedDocument,
   SavedAsset,
@@ -17,6 +18,7 @@ export function createBrowserHost(): Host {
     documents: createBrowserDocuments(),
     dialogs,
     window: createBrowserWindow(dialogs),
+    export: createBrowserExport(),
   };
 }
 
@@ -84,6 +86,19 @@ function createBrowserDialogs(): DialogHost {
       const result = await postJson<{ path: string | null }>("/api/pick-save-markdown", { defaultPath: defaultPath ?? null });
       if (!result.path) return null;
       return ensureMarkdownExtension(result.path);
+    },
+    async pickSavePdf(defaultPath?: string): Promise<string | null> {
+      const result = await postJson<{ path: string | null }>("/api/pick-save-pdf", { defaultPath: defaultPath ?? null });
+      if (!result.path) return null;
+      return ensurePdfExtension(result.path);
+    },
+  };
+}
+
+function createBrowserExport(): ExportHost {
+  return {
+    async exportPdf(_path: string): Promise<void> {
+      window.print();
     },
   };
 }

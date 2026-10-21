@@ -202,3 +202,49 @@ body {
 .statusbar .dirty {
   color: var(--crepe-color-error, #9a3412);
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body,
+  .app,
+  .workspace,
+  .editor {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .menubar,
+  .statusbar,
+  .source,
+  .milkdown-toolbar,
+  .milkdown-block-handle,
+  .milkdown-slash-menu,
+  .milkdown-link-preview,
+  .milkdown-link-edit,
+  .milkdown-latex-inline-edit,
+  .crepe-placeholder::before,
+  .language-picker,
+  .empty-image-inline,
+  .empty-image-block {
+    display: none !important;
+  }
+
+  .editor .milkdown .ProseMirror {
+    padding: 0 !important;
+  }
+
+  .editor img,
+  .editor table,
+  .editor .milkdown-code-block,
+  .editor .katex-display,
+  .editor span[data-type="math_inline"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

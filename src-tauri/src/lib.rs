@@ -3,6 +3,7 @@ mod commands;
 #[cfg(any(feature = "http", test))]
 mod http_api;
 mod infrastructure;
+mod print_pdf;
 
 #[cfg(feature = "http")]
 pub fn serve_http(addr: &str) {

@@ -380,7 +380,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bundlepad"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "base64 0.22.1",
  "dunce",
@@ -393,6 +393,8 @@ dependencies = [
  "tauri-plugin-dialog",
  "tempfile",
  "tiny_http",
+ "webview2-com",
+ "windows",
  "zip",
 ]
 

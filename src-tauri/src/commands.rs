@@ -5,6 +5,7 @@ use crate::app::document::{DocumentStore, OpenedDocument};
 use crate::app::error::{AppError, AppResult};
 use crate::app::stamp::FileStamp;
 use crate::infrastructure::FsDocument;
+use crate::print_pdf;
 
 fn launch_document_args() -> Vec<String> {
     std::env::args()
@@ -61,6 +62,18 @@ async fn import_local_image(document_path: String, source_path: String) -> Resul
     spawn(move || FsDocument.import_local_image(Path::new(&document_path), Path::new(&source_path))).await
 }
 
+#[tauri::command]
+async fn export_pdf<R: tauri::Runtime>(app: tauri::AppHandle<R>, path: String) -> Result<(), AppError> {
+    use tauri::Manager;
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| AppError::msg("找不到主窗口"))?;
+    tauri::async_runtime::spawn_blocking(move || print_pdf::export_pdf(window, path))
+        .await
+        .map_err(|_| AppError::msg("后台任务失败"))?
+}
+
 async fn spawn<T: Send + 'static>(work: impl FnOnce() -> AppResult<T> + Send + 'static) -> AppResult<T> {
     tauri::async_runtime::spawn_blocking(work).await.map_err(|_| AppError::msg("后台任务失败"))?
 }
@@ -73,5 +86,6 @@ pub fn register<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         read_asset,
         write_asset,
         import_local_image,
+        export_pdf,
     ])
 }

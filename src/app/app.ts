@@ -1,6 +1,7 @@
 import type { Crepe } from "@milkdown/crepe";
 import { decodeBase64, encodeBase64 } from "../host/codec.ts";
 import { asAppError } from "../host/error.ts";
+import { defaultPdfPath } from "../host/markdown-path.ts";
 import type { Host, OpenedDocument } from "../host/types.ts";
 import { bindShortcuts } from "./shortcuts.ts";
 import { AssetUrlMap, missingImageUrl } from "../document/asset-url-map.ts";
@@ -218,6 +219,20 @@ export async function startApp(host: Host): Promise<void> {
     }
   };
 
+  const exportPdf = async () => {
+    if (sourceMode) {
+      await host.dialogs.showWarning("请先退出源码模式，再导出 PDF。");
+      return;
+    }
+    const target = await host.dialogs.pickSavePdf(defaultPdfPath(session.displayName, session.path));
+    if (!target) return;
+    try {
+      await host.export.exportPdf(target);
+    } catch (error) {
+      await host.dialogs.showError(asAppError(error).message);
+    }
+  };
+
   const copyLocalImages = async (markdown: string, target: string) => {
     const mapping = new Map<string, string>();
     const missing: string[] = [];
@@ -298,6 +313,7 @@ export async function startApp(host: Host): Promise<void> {
         },
         { label: "保存", shortcut: "Ctrl+S", separatorBefore: true, run: () => void guard(async () => { await saveCurrent(); }) },
         { label: "另存为 Markdown", shortcut: "Ctrl+Shift+S", run: () => void guard(async () => { await saveAs(); }) },
+        { label: "导出 PDF", run: () => void guard(exportPdf) },
         { label: "退出", separatorBefore: true, run: () => void host.window.requestClose() },
       ],
     },

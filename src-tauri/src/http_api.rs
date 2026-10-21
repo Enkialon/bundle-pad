@@ -87,6 +87,7 @@ fn dispatch_dialog(path: &str, body: &str) -> (u16, String) {
         "/api/pick-markdown" => pick_path(body, pick_markdown),
         "/api/pick-textbundle" => pick_path(body, pick_textbundle),
         "/api/pick-save-markdown" => pick_path(body, pick_save_markdown),
+        "/api/pick-save-pdf" => pick_path(body, pick_save_pdf),
         _ => error_body(404, "error", "未知接口"),
     }
 }
@@ -178,6 +179,17 @@ fn pick_save_markdown(default_path: Option<String>) -> Option<String> {
         rfd::FileDialog::new()
             .set_title("另存为 Markdown")
             .add_filter("Markdown", &["md", "markdown"]),
+        default_path,
+    );
+    dialog.save_file().map(path_to_string)
+}
+
+#[cfg(feature = "http")]
+fn pick_save_pdf(default_path: Option<String>) -> Option<String> {
+    let dialog = with_directory(
+        rfd::FileDialog::new()
+            .set_title("导出 PDF")
+            .add_filter("PDF", &["pdf"]),
         default_path,
     );
     dialog.save_file().map(path_to_string)
